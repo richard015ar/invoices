@@ -78,17 +78,23 @@
         <section class="grid cols-2">
             <div>
                 <h4>Desde</h4>
-                <p>{{ $invoice->from_name }}</p>
-                <p>{{ $invoice->from_email }}</p>
-                <p>{{ $invoice->from_address }}</p>
+                <p>{{ $displayIssuer['name'] }}</p>
+                <p>{{ $displayIssuer['email'] }}</p>
+                <p>{{ $displayIssuer['address'] }}</p>
+                @if ($displayIssuer['nie'])
+                    <p><strong>NIE:</strong> {{ $displayIssuer['nie'] }}</p>
+                @endif
+                @if ($displayIssuer['additional_info'])
+                    <p>{{ $displayIssuer['additional_info'] }}</p>
+                @endif
             </div>
             <div>
                 <h4>Para</h4>
-                <p>{{ $invoice->client_name }}</p>
-                <p>{{ $invoice->client_email }}</p>
-                <p>{{ $invoice->client_address }}</p>
-                @if ($invoice->client_details)
-                    <p><strong>Detalles:</strong> {{ $invoice->client_details }}</p>
+                <p>{{ $displayClient['name'] }}</p>
+                <p>{{ $displayClient['email'] }}</p>
+                <p>{{ $displayClient['address'] }}</p>
+                @if ($displayClient['details'])
+                    <p><strong>Detalles:</strong> {{ $displayClient['details'] }}</p>
                 @endif
             </div>
         </section>

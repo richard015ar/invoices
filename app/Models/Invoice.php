@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
@@ -20,9 +21,12 @@ class Invoice extends Model
         'currency',
         'template',
         'accent_color',
+        'client_id',
         'from_name',
         'from_email',
         'from_address',
+        'from_nie',
+        'from_additional_info',
         'client_name',
         'client_email',
         'client_address',
@@ -44,6 +48,11 @@ class Invoice extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(InvoiceLine::class)->orderBy('position');
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     public function recalculateTotals(): void

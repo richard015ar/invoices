@@ -18,7 +18,7 @@
     $lineItems = old('lines', $defaultLineItems);
 @endphp
 
-<section class="panel" data-invoice-form data-catalog='@json($catalogItems)'>
+<section class="panel" data-invoice-form data-catalog='@json($catalogItems)' data-clients='@json($clients)'>
     <div class="panel-head">
         <h2>{{ $title }}</h2>
     </div>
@@ -71,20 +71,42 @@
             </label>
         </div>
 
-        <div class="grid cols-2">
-            <label>
-                Desde (tu nombre)
-                <input name="from_name" required value="{{ old('from_name', $invoice->from_name) }}" />
-            </label>
-            <label>
-                Tu email
-                <input type="email" name="from_email" value="{{ old('from_email', $invoice->from_email) }}" />
-            </label>
+        <div class="panel nested">
+            <div class="panel-head">
+                <h3>Tus datos (Mi perfil)</h3>
+                <a class="btn-secondary" href="{{ route('issuer-profile.edit') }}">Editar perfil</a>
+            </div>
+            <p><strong>{{ old('from_name', $invoice->from_name) }}</strong></p>
+            @if (old('from_email', $invoice->from_email))
+                <p>{{ old('from_email', $invoice->from_email) }}</p>
+            @endif
+            @if (old('from_address', $invoice->from_address))
+                <p>{!! nl2br(e(old('from_address', $invoice->from_address))) !!}</p>
+            @endif
+            @if (old('from_nie', $invoice->from_nie))
+                <p><strong>NIE:</strong> {{ old('from_nie', $invoice->from_nie) }}</p>
+            @endif
+            @if (old('from_additional_info', $invoice->from_additional_info))
+                <p>{!! nl2br(e(old('from_additional_info', $invoice->from_additional_info))) !!}</p>
+            @endif
         </div>
 
+        <input type="hidden" name="from_name" value="{{ old('from_name', $invoice->from_name) }}">
+        <input type="hidden" name="from_email" value="{{ old('from_email', $invoice->from_email) }}">
+        <input type="hidden" name="from_address" value="{{ old('from_address', $invoice->from_address) }}">
+        <input type="hidden" name="from_nie" value="{{ old('from_nie', $invoice->from_nie) }}">
+        <input type="hidden" name="from_additional_info" value="{{ old('from_additional_info', $invoice->from_additional_info) }}">
+
         <label>
-            Tu direccion
-            <textarea name="from_address" rows="2">{{ old('from_address', $invoice->from_address) }}</textarea>
+            Cliente guardado (opcional)
+            <select name="client_id" data-client-select>
+                <option value="">Seleccion manual</option>
+                @foreach ($clients as $client)
+                    <option value="{{ $client->id }}" @selected((string) old('client_id', $invoice->client_id) === (string) $client->id)>
+                        {{ $client->name }}
+                    </option>
+                @endforeach
+            </select>
         </label>
 
         <div class="grid cols-2">
@@ -221,6 +243,7 @@
         if (!formRoot) return;
 
         const catalogItems = JSON.parse(formRoot.dataset.catalog || '[]');
+        const clients = JSON.parse(formRoot.dataset.clients || '[]');
         const linesContainer = formRoot.querySelector('[data-lines]');
         const addLineButton = formRoot.querySelector('[data-add-line]');
         const template = document.getElementById('line-template');
@@ -327,6 +350,36 @@
         });
 
         formRoot.querySelector('input[name="currency"]')?.addEventListener('input', recalc);
+
+        const applyClientData = (client, overwrite = true) => {
+            const setValue = (selector, value) => {
+                const input = formRoot.querySelector(selector);
+                if (!input) return;
+                if (!overwrite && String(input.value || '').trim() !== '') return;
+                input.value = value || '';
+            };
+
+            setValue('input[name="client_name"]', client.name);
+            setValue('input[name="client_email"]', client.email);
+            setValue('textarea[name="client_address"]', client.address);
+            setValue('textarea[name="client_details"]', client.details);
+        };
+
+        const clientSelect = formRoot.querySelector('[data-client-select]');
+
+        clientSelect?.addEventListener('change', (event) => {
+            const selectedId = event.target.value;
+            const client = clients.find((entry) => String(entry.id) === String(selectedId));
+            if (!client) return;
+            applyClientData(client, true);
+        });
+
+        if (clientSelect?.value) {
+            const selectedClient = clients.find((entry) => String(entry.id) === String(clientSelect.value));
+            if (selectedClient) {
+                applyClientData(selectedClient, true);
+            }
+        }
         recalc();
     });
 </script>

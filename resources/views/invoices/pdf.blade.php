@@ -149,9 +149,14 @@
         <table class="top" cellpadding="0" cellspacing="0">
             <tr>
                 <td>
-                    <div class="brand">{{ $invoice->from_name }}</div>
+                    <div class="brand">{{ $displayIssuer['name'] }}</div>
                     <div class="brand-sub">
-                        {!! nl2br(e(trim(($invoice->from_email ?? '') . "\n" . ($invoice->from_address ?? '')))) !!}
+                        {!! nl2br(e(trim(
+                            ($displayIssuer['email'] ?? '') . "\n" .
+                            ($displayIssuer['address'] ?? '') . "\n" .
+                            (($displayIssuer['nie'] ?? '') ? 'NIE: ' . $displayIssuer['nie'] : '') . "\n" .
+                            ($displayIssuer['additional_info'] ?? '')
+                        ))) !!}
                     </div>
                     <table class="meta" cellpadding="0" cellspacing="0">
                         <tr>
@@ -210,8 +215,8 @@
         <table class="footer" cellpadding="0" cellspacing="0">
             <tr>
                 <td>
-                    <div class="footer-title">{{ $invoice->client_name }}</div>
-                    {!! nl2br(e(trim(($invoice->client_email ?? '') . "\n" . ($invoice->client_address ?? '') . "\n" . ($invoice->client_details ?? '')))) !!}
+                    <div class="footer-title">{{ $displayClient['name'] }}</div>
+                    {!! nl2br(e(trim(($displayClient['email'] ?? '') . "\n" . ($displayClient['address'] ?? '') . "\n" . ($displayClient['details'] ?? '')))) !!}
                 </td>
                 <td class="footer-right">
                     @if($invoice->notes)

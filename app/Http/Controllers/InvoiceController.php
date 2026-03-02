@@ -6,6 +6,7 @@ use App\Http\Requests\StoreInvoiceRequest;
 use App\Http\Requests\UpdateInvoiceRequest;
 use App\Mail\InvoiceEmail;
 use App\Models\CatalogItem;
+use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -28,6 +29,7 @@ class InvoiceController extends Controller
 
     public function create(Request $request): View
     {
+        $issuerProfile = IssuerProfileController::profile();
         $cloneSource = null;
         $clonedLines = null;
 
@@ -55,9 +57,12 @@ class InvoiceController extends Controller
                 'currency' => 'USD',
                 'template' => 'aurora',
                 'accent_color' => '#0f766e',
-                'from_name' => $cloneSource?->from_name ?? 'Ricardo Aragon',
-                'from_email' => $cloneSource?->from_email ?? '',
-                'from_address' => $cloneSource?->from_address ?? '',
+                'from_name' => $cloneSource?->from_name ?? $issuerProfile->name,
+                'from_email' => $cloneSource?->from_email ?? $issuerProfile->email,
+                'from_address' => $cloneSource?->from_address ?? $issuerProfile->address,
+                'from_nie' => $cloneSource?->from_nie ?? $issuerProfile->nie,
+                'from_additional_info' => $cloneSource?->from_additional_info ?? $issuerProfile->additional_info,
+                'client_id' => $cloneSource?->client_id,
                 'client_name' => $cloneSource?->client_name ?? '',
                 'client_email' => $cloneSource?->client_email ?? '',
                 'client_address' => $cloneSource?->client_address ?? '',
@@ -66,6 +71,8 @@ class InvoiceController extends Controller
             ]),
             'clonedLines' => $clonedLines,
             'catalogItems' => $this->catalogItemsForForm(),
+            'clients' => Client::query()->where('is_active', true)->orderBy('name')->get(),
+            'issuerProfile' => $issuerProfile,
             'templates' => config('invoice_templates'),
         ]);
     }
@@ -90,11 +97,36 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice): View
     {
-        $invoice->load(['lines.catalogItem']);
+        $invoice->load(['lines.catalogItem', 'client']);
+        $issuerProfile = IssuerProfileController::profile();
+
+        $displayIssuer = [
+            'name' => $invoice->from_name ?: $issuerProfile->name,
+            'email' => $invoice->from_email ?: $issuerProfile->email,
+            'address' => $invoice->from_address ?: $issuerProfile->address,
+            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
+            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+        ];
+
+        $displayClient = $invoice->client
+            ? [
+                'name' => $invoice->client->name,
+                'email' => $invoice->client->email,
+                'address' => $invoice->client->address,
+                'details' => $invoice->client->details,
+            ]
+            : [
+                'name' => $invoice->client_name,
+                'email' => $invoice->client_email,
+                'address' => $invoice->client_address,
+                'details' => $invoice->client_details,
+            ];
 
         return view('invoices.show', [
             'invoice' => $invoice,
             'template' => config('invoice_templates.' . $invoice->template),
+            'displayIssuer' => $displayIssuer,
+            'displayClient' => $displayClient,
         ]);
     }
 
@@ -103,6 +135,8 @@ class InvoiceController extends Controller
         return view('invoices.edit', [
             'invoice' => $invoice->load('lines'),
             'catalogItems' => $this->catalogItemsForForm(),
+            'clients' => Client::query()->where('is_active', true)->orderBy('name')->get(),
+            'issuerProfile' => IssuerProfileController::profile(),
             'templates' => config('invoice_templates'),
         ]);
     }
@@ -151,9 +185,12 @@ class InvoiceController extends Controller
                     'currency',
                     'template',
                     'accent_color',
+                    'client_id',
                     'from_name',
                     'from_email',
                     'from_address',
+                    'from_nie',
+                    'from_additional_info',
                     'client_name',
                     'client_email',
                     'client_address',
@@ -180,12 +217,37 @@ class InvoiceController extends Controller
 
     public function pdf(Invoice $invoice)
     {
-        $invoice->load('lines');
+        $invoice->load(['lines', 'client']);
         $template = config('invoice_templates.' . $invoice->template);
+        $issuerProfile = IssuerProfileController::profile();
+
+        $displayIssuer = [
+            'name' => $invoice->from_name ?: $issuerProfile->name,
+            'email' => $invoice->from_email ?: $issuerProfile->email,
+            'address' => $invoice->from_address ?: $issuerProfile->address,
+            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
+            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+        ];
+
+        $displayClient = $invoice->client
+            ? [
+                'name' => $invoice->client->name,
+                'email' => $invoice->client->email,
+                'address' => $invoice->client->address,
+                'details' => $invoice->client->details,
+            ]
+            : [
+                'name' => $invoice->client_name,
+                'email' => $invoice->client_email,
+                'address' => $invoice->client_address,
+                'details' => $invoice->client_details,
+            ];
 
         $pdf = Pdf::loadView('invoices.pdf', [
             'invoice' => $invoice,
             'template' => $template,
+            'displayIssuer' => $displayIssuer,
+            'displayClient' => $displayClient,
         ]);
 
         return $pdf->download($invoice->invoice_number . '.pdf');
@@ -201,12 +263,37 @@ class InvoiceController extends Controller
             'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp,txt,csv,doc,docx,xls,xlsx'],
         ]);
 
-        $invoice->load('lines');
+        $invoice->load(['lines', 'client']);
         $template = config('invoice_templates.' . $invoice->template);
+        $issuerProfile = IssuerProfileController::profile();
+
+        $displayIssuer = [
+            'name' => $invoice->from_name ?: $issuerProfile->name,
+            'email' => $invoice->from_email ?: $issuerProfile->email,
+            'address' => $invoice->from_address ?: $issuerProfile->address,
+            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
+            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+        ];
+
+        $displayClient = $invoice->client
+            ? [
+                'name' => $invoice->client->name,
+                'email' => $invoice->client->email,
+                'address' => $invoice->client->address,
+                'details' => $invoice->client->details,
+            ]
+            : [
+                'name' => $invoice->client_name,
+                'email' => $invoice->client_email,
+                'address' => $invoice->client_address,
+                'details' => $invoice->client_details,
+            ];
 
         $pdfBinary = Pdf::loadView('invoices.pdf', [
             'invoice' => $invoice,
             'template' => $template,
+            'displayIssuer' => $displayIssuer,
+            'displayClient' => $displayClient,
         ])->output();
 
         $mail = new InvoiceEmail(
@@ -245,9 +332,12 @@ class InvoiceController extends Controller
             'currency' => strtoupper($validated['currency']),
             'template' => $validated['template'],
             'accent_color' => $validated['accent_color'],
+            'client_id' => $validated['client_id'] ?? null,
             'from_name' => $validated['from_name'],
             'from_email' => $validated['from_email'] ?? null,
             'from_address' => $validated['from_address'] ?? null,
+            'from_nie' => $validated['from_nie'] ?? null,
+            'from_additional_info' => $validated['from_additional_info'] ?? null,
             'client_name' => $validated['client_name'],
             'client_email' => $validated['client_email'] ?? null,
             'client_address' => $validated['client_address'] ?? null,
