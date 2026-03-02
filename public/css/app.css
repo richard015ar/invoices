@@ -262,6 +262,19 @@ th, td {
     padding: 1rem;
 }
 
+.send-panel {
+    margin-bottom: 0.9rem;
+}
+
+.send-panel summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.send-panel[open] summary {
+    margin-bottom: 0.8rem;
+}
+
 .invoice-card > header {
     display: flex;
     justify-content: space-between;

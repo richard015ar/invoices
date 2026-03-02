@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreInvoiceRequest;
 use App\Http\Requests\UpdateInvoiceRequest;
+use App\Mail\InvoiceEmail;
 use App\Models\CatalogItem;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
@@ -186,6 +188,32 @@ class InvoiceController extends Controller
         ]);
 
         return $pdf->download($invoice->invoice_number . '.pdf');
+    }
+
+    public function send(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $validated = $request->validate([
+            'recipient_email' => ['required', 'email', 'max:255'],
+            'subject' => ['required', 'string', 'max:255'],
+            'body' => ['nullable', 'string'],
+        ]);
+
+        $invoice->load('lines');
+        $template = config('invoice_templates.' . $invoice->template);
+
+        $pdfBinary = Pdf::loadView('invoices.pdf', [
+            'invoice' => $invoice,
+            'template' => $template,
+        ])->output();
+
+        Mail::to($validated['recipient_email'])->send(new InvoiceEmail(
+            invoice: $invoice,
+            subjectLine: $validated['subject'],
+            messageBody: (string) ($validated['body'] ?? ''),
+            pdfBinary: $pdfBinary
+        ));
+
+        return back()->with('success', 'Invoice enviada a ' . $validated['recipient_email'] . '.');
     }
 
     private function invoiceAttributes(array $validated): array

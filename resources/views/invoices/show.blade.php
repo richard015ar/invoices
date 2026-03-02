@@ -19,6 +19,39 @@
         </div>
     </div>
 
+    <details class="panel nested send-panel">
+        <summary>Enviar</summary>
+        <form method="POST" action="{{ route('invoices.send', $invoice) }}" class="stack">
+            @csrf
+            <div class="grid cols-2">
+                <label>
+                    Destinatario
+                    <input
+                        type="email"
+                        name="recipient_email"
+                        required
+                        value="{{ old('recipient_email', $invoice->client_email ?: 'billingadmin@pressbooks.com') }}"
+                    />
+                </label>
+                <label>
+                    Asunto
+                    <input
+                        name="subject"
+                        required
+                        value="{{ old('subject', 'Invoice ' . $invoice->invoice_number) }}"
+                    />
+                </label>
+            </div>
+            <label>
+                Body (texto simple)
+                <textarea name="body" rows="6">{{ old('body', "Hi,\n\nPlease find attached invoice {$invoice->invoice_number}.\n\nThanks,") }}</textarea>
+            </label>
+            <div>
+                <button class="btn-primary" type="submit">Enviar email con PDF</button>
+            </div>
+        </form>
+    </details>
+
     <article class="invoice-card">
         <header>
             <div>
