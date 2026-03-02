@@ -16,6 +16,7 @@
             <nav class="nav-links">
                 <a href="{{ route('invoices.index') }}" class="{{ request()->routeIs('invoices.*') ? 'is-active' : '' }}">Historial</a>
                 <a href="{{ route('catalog-items.index') }}" class="{{ request()->routeIs('catalog-items.*') ? 'is-active' : '' }}">Items reutilizables</a>
+                <a href="{{ route('pb-allowances.index') }}" class="{{ request()->routeIs('pb-allowances.*') ? 'is-active' : '' }}">PB Allowances</a>
                 <a href="{{ route('invoices.create') }}" class="cta">Nueva invoice</a>
             </nav>
         </header>

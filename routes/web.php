@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CatalogItemController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\PbAllowanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('invoices.index'));
@@ -13,3 +14,6 @@ Route::patch('invoices/{invoice}/status', [InvoiceController::class, 'updateStat
 
 Route::resource('catalog-items', CatalogItemController::class)
     ->except(['show']);
+
+Route::get('pb-allowances', [PbAllowanceController::class, 'index'])
+    ->name('pb-allowances.index');

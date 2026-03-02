@@ -6,7 +6,9 @@ use App\Http\Requests\StoreInvoiceRequest;
 use App\Http\Requests\UpdateInvoiceRequest;
 use App\Models\CatalogItem;
 use App\Models\Invoice;
+use App\Models\InvoiceLine;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +62,7 @@ class InvoiceController extends Controller
                 'notes' => $cloneSource?->notes ?? '',
             ]),
             'clonedLines' => $clonedLines,
-            'catalogItems' => CatalogItem::query()->where('is_active', true)->orderBy('name')->get(),
+            'catalogItems' => $this->catalogItemsForForm(),
             'templates' => config('invoice_templates'),
         ]);
     }
@@ -97,7 +99,7 @@ class InvoiceController extends Controller
     {
         return view('invoices.edit', [
             'invoice' => $invoice->load('lines'),
-            'catalogItems' => CatalogItem::query()->where('is_active', true)->orderBy('name')->get(),
+            'catalogItems' => $this->catalogItemsForForm(),
             'templates' => config('invoice_templates'),
         ]);
     }
@@ -239,5 +241,59 @@ class InvoiceController extends Controller
         $count = Invoice::query()->whereYear('issue_date', now()->year)->count() + 1;
 
         return sprintf('INV-%s-%04d', $year, $count);
+    }
+
+    private function catalogItemsForForm(): Collection
+    {
+        $items = CatalogItem::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $allowanceDefinitions = collect(config('pb_allowances.items', []));
+        $allowanceByName = $allowanceDefinitions->keyBy('name');
+
+        $allowanceItemIds = $items
+            ->filter(fn (CatalogItem $item): bool => $allowanceByName->has($item->name))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        $usageByCatalogItemId = [];
+
+        if (!empty($allowanceItemIds)) {
+            $usageByCatalogItemId = InvoiceLine::query()
+                ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
+                ->whereIn('catalog_item_id', $allowanceItemIds)
+                ->whereHas('invoice', function ($query): void {
+                    $query->whereBetween('issue_date', [
+                        now()->startOfYear()->toDateString(),
+                        now()->endOfYear()->toDateString(),
+                    ]);
+                })
+                ->groupBy('catalog_item_id')
+                ->pluck('used_total', 'catalog_item_id')
+                ->all();
+        }
+
+        return $items->each(function (CatalogItem $item) use ($allowanceByName, $usageByCatalogItemId): void {
+            $definition = $allowanceByName->get($item->name);
+
+            if (!$definition) {
+                $item->setAttribute('allowance_is_tracked', false);
+
+                return;
+            }
+
+            $annualLimit = (float) ($definition['annual_limit'] ?? 0);
+            $used = (float) ($usageByCatalogItemId[$item->id] ?? 0);
+
+            $item->setAttribute('allowance_is_tracked', true);
+            $item->setAttribute('allowance_annual_limit', round($annualLimit, 2));
+            $item->setAttribute('allowance_used_current_year', round($used, 2));
+            $item->setAttribute('allowance_remaining_current_year', round($annualLimit - $used, 2));
+            $item->setAttribute('allowance_currency', config('pb_allowances.currency', 'CAD'));
+            $item->setAttribute('allowance_year', now()->year);
+        });
     }
 }

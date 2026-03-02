@@ -155,6 +155,7 @@
                                 <input type="number" step="0.01" min="0" max="100" name="lines[{{ $index }}][tax_rate]" value="{{ $line['tax_rate'] }}" data-tax-rate />
                             </label>
                             <div class="line-total">Total: <span data-line-total>0.00</span></div>
+                            <div class="allowance-hint" data-allowance-hint hidden></div>
                             <button type="button" class="btn-danger" data-remove-line>Eliminar</button>
                         </div>
                     </div>
@@ -208,6 +209,7 @@
                 <input type="number" step="0.01" min="0" max="100" data-name="tax_rate" value="0" data-tax-rate />
             </label>
             <div class="line-total">Total: <span data-line-total>0.00</span></div>
+            <div class="allowance-hint" data-allowance-hint hidden></div>
             <button type="button" class="btn-danger" data-remove-line>Eliminar</button>
         </div>
     </div>
@@ -224,6 +226,27 @@
         const template = document.getElementById('line-template');
 
         const currency = () => (formRoot.querySelector('input[name="currency"]')?.value || 'USD').toUpperCase();
+        const formatMoney = (amount, code = currency()) => `${code} ${Number(amount || 0).toFixed(2)}`;
+
+        const updateAllowanceHint = (line, item = null) => {
+            const hint = line.querySelector('[data-allowance-hint]');
+            if (!hint) return;
+
+            if (!item || !item.allowance_is_tracked) {
+                hint.hidden = true;
+                hint.textContent = '';
+                return;
+            }
+
+            const remaining = Number(item.allowance_remaining_current_year || 0);
+            const used = Number(item.allowance_used_current_year || 0);
+            const annualLimit = Number(item.allowance_annual_limit || 0);
+            const code = item.allowance_currency || 'CAD';
+            const year = item.allowance_year || new Date().getFullYear();
+
+            hint.textContent = `Disponible ${year}: ${formatMoney(remaining, code)} de ${formatMoney(annualLimit, code)} (usado: ${formatMoney(used, code)})`;
+            hint.hidden = false;
+        };
 
         const updateNames = () => {
             [...linesContainer.querySelectorAll('[data-line]')].forEach((line, index) => {
@@ -268,13 +291,21 @@
             line.querySelector('[data-catalog-select]').addEventListener('change', (event) => {
                 const selectedId = event.target.value;
                 const item = catalogItems.find((entry) => String(entry.id) === String(selectedId));
-                if (!item) return;
+                if (!item) {
+                    updateAllowanceHint(line);
+                    return;
+                }
 
                 line.querySelector('[data-description]').value = item.description || item.name;
                 line.querySelector('[data-unit-price]').value = Number(item.default_unit_price || 0).toFixed(2);
                 line.querySelector('[data-tax-rate]').value = Number(item.default_tax_rate || 0).toFixed(2);
+                updateAllowanceHint(line, item);
                 recalc();
             });
+
+            const selectedId = line.querySelector('[data-catalog-select]')?.value;
+            const selectedItem = catalogItems.find((entry) => String(entry.id) === String(selectedId));
+            updateAllowanceHint(line, selectedItem || null);
         };
 
         addLineButton.addEventListener('click', () => {
