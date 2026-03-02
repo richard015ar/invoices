@@ -12,6 +12,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
@@ -196,6 +197,8 @@ class InvoiceController extends Controller
             'recipient_email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            'attachments' => ['nullable', 'array'],
+            'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp,txt,csv,doc,docx,xls,xlsx'],
         ]);
 
         $invoice->load('lines');
@@ -206,12 +209,28 @@ class InvoiceController extends Controller
             'template' => $template,
         ])->output();
 
-        Mail::to($validated['recipient_email'])->send(new InvoiceEmail(
+        $mail = new InvoiceEmail(
             invoice: $invoice,
             subjectLine: $validated['subject'],
             messageBody: (string) ($validated['body'] ?? ''),
             pdfBinary: $pdfBinary
-        ));
+        );
+
+        foreach ($request->file('attachments', []) as $attachment) {
+            if (!$attachment instanceof UploadedFile) {
+                continue;
+            }
+
+            $mail->attach(
+                $attachment->getRealPath(),
+                [
+                    'as' => $attachment->getClientOriginalName(),
+                    'mime' => $attachment->getMimeType() ?: 'application/octet-stream',
+                ]
+            );
+        }
+
+        Mail::to($validated['recipient_email'])->send($mail);
 
         return back()->with('success', 'Invoice enviada a ' . $validated['recipient_email'] . '.');
     }

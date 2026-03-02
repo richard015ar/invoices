@@ -275,6 +275,11 @@ th, td {
     margin-bottom: 0.8rem;
 }
 
+.send-panel small {
+    color: #64748b;
+    font-size: 0.78rem;
+}
+
 .invoice-card > header {
     display: flex;
     justify-content: space-between;

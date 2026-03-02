@@ -21,7 +21,7 @@
 
     <details class="panel nested send-panel">
         <summary>Enviar</summary>
-        <form method="POST" action="{{ route('invoices.send', $invoice) }}" class="stack">
+        <form method="POST" action="{{ route('invoices.send', $invoice) }}" class="stack" enctype="multipart/form-data">
             @csrf
             <div class="grid cols-2">
                 <label>
@@ -45,6 +45,16 @@
             <label>
                 Body (texto simple)
                 <textarea name="body" rows="6">{{ old('body', "Hi,\n\nPlease find attached invoice {$invoice->invoice_number}.\n\nThanks,") }}</textarea>
+            </label>
+            <label>
+                Adjuntar archivos (opcional)
+                <input
+                    type="file"
+                    name="attachments[]"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                />
+                <small>Se adjuntan junto al PDF de la invoice. Max 10MB por archivo.</small>
             </label>
             <div>
                 <button class="btn-primary" type="submit">Enviar email con PDF</button>

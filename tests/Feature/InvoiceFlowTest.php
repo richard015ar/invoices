@@ -6,6 +6,7 @@ use App\Mail\InvoiceEmail;
 use App\Models\CatalogItem;
 use App\Models\Invoice;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -177,6 +178,49 @@ class InvoiceFlowTest extends TestCase
             return $mail->hasTo('billingadmin@pressbooks.com')
                 && $mail->subjectLine === 'Invoice INV-2026-0099'
                 && $mail->messageBody === 'Please find attached invoice.';
+        });
+    }
+
+    public function test_it_sends_invoice_email_with_extra_attachments(): void
+    {
+        Mail::fake();
+
+        $invoice = Invoice::query()->create([
+            'invoice_number' => 'INV-2026-0100',
+            'issue_date' => now()->toDateString(),
+            'status' => 'draft',
+            'currency' => 'USD',
+            'template' => 'aurora',
+            'accent_color' => '#0f766e',
+            'from_name' => 'Ricardo',
+            'client_name' => 'Pressbooks',
+        ]);
+
+        $invoice->lines()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 0,
+            'line_total' => 100,
+        ]);
+
+        $invoice->recalculateTotals();
+
+        $response = $this->post(route('invoices.send', $invoice), [
+            'recipient_email' => 'billingadmin@pressbooks.com',
+            'subject' => 'Invoice INV-2026-0100',
+            'body' => 'Please find attached invoice and receipts.',
+            'attachments' => [
+                UploadedFile::fake()->create('receipt-1.pdf', 200, 'application/pdf'),
+                UploadedFile::fake()->image('receipt-2.jpg'),
+            ],
+        ]);
+
+        $response->assertRedirect();
+
+        Mail::assertSent(InvoiceEmail::class, function (InvoiceEmail $mail): bool {
+            return $mail->hasTo('billingadmin@pressbooks.com')
+                && $mail->subjectLine === 'Invoice INV-2026-0100';
         });
     }
 }
