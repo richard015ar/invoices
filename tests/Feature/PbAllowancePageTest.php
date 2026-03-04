@@ -13,7 +13,10 @@ class PbAllowancePageTest extends TestCase
 
     public function test_it_shows_allowance_usage_for_selected_year(): void
     {
+        $user = $this->signIn();
+
         $wellness = CatalogItem::query()->create([
+            'user_id' => $user->id,
             'name' => 'Wellness Allowance',
             'default_unit_price' => 1500,
             'default_tax_rate' => 0,
@@ -21,6 +24,7 @@ class PbAllowancePageTest extends TestCase
         ]);
 
         $invoice2026 = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0001',
             'issue_date' => '2026-02-20',
             'status' => 'paid',
@@ -41,6 +45,7 @@ class PbAllowancePageTest extends TestCase
         ]);
 
         $invoice2025 = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2025-0001',
             'issue_date' => '2025-10-20',
             'status' => 'paid',
@@ -72,6 +77,8 @@ class PbAllowancePageTest extends TestCase
 
     public function test_it_defaults_to_current_year_when_invalid_year_is_sent(): void
     {
+        $this->signIn();
+
         $response = $this->get(route('pb-allowances.index', ['year' => 9999]));
 
         $response->assertOk();

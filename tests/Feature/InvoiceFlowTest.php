@@ -16,7 +16,10 @@ class InvoiceFlowTest extends TestCase
 
     public function test_it_creates_an_invoice_with_line_items(): void
     {
+        $user = $this->signIn();
+
         $item = CatalogItem::query()->create([
+            'user_id' => $user->id,
             'name' => 'Consulting - 1 hora',
             'description' => 'Consulting Pressbooks',
             'default_unit_price' => 120,
@@ -57,11 +60,15 @@ class InvoiceFlowTest extends TestCase
         $this->assertSame('Pressbooks', $invoice->client_name);
         $this->assertEquals(240.00, (float) $invoice->subtotal);
         $this->assertCount(1, $invoice->lines);
+        $this->assertSame($user->id, $invoice->user_id);
     }
 
     public function test_it_downloads_invoice_pdf(): void
     {
+        $user = $this->signIn();
+
         $invoice = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0001',
             'issue_date' => now()->toDateString(),
             'status' => 'draft',
@@ -90,7 +97,10 @@ class InvoiceFlowTest extends TestCase
 
     public function test_it_updates_invoice_status_from_index(): void
     {
+        $user = $this->signIn();
+
         $invoice = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0002',
             'issue_date' => now()->toDateString(),
             'status' => 'draft',
@@ -115,7 +125,10 @@ class InvoiceFlowTest extends TestCase
 
     public function test_it_prefills_create_form_when_cloning_from_existing_invoice(): void
     {
+        $user = $this->signIn();
+
         $invoice = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0003',
             'issue_date' => now()->toDateString(),
             'status' => 'draft',
@@ -144,8 +157,10 @@ class InvoiceFlowTest extends TestCase
     public function test_it_sends_invoice_email_with_pdf_attachment(): void
     {
         Mail::fake();
+        $user = $this->signIn();
 
         $invoice = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0099',
             'issue_date' => now()->toDateString(),
             'status' => 'draft',
@@ -184,8 +199,10 @@ class InvoiceFlowTest extends TestCase
     public function test_it_sends_invoice_email_with_extra_attachments(): void
     {
         Mail::fake();
+        $user = $this->signIn();
 
         $invoice = Invoice::query()->create([
+            'user_id' => $user->id,
             'invoice_number' => 'INV-2026-0100',
             'issue_date' => now()->toDateString(),
             'status' => 'draft',

@@ -13,7 +13,10 @@ class ClientController extends Controller
     public function index(): View
     {
         return view('clients.index', [
-            'clients' => Client::query()->latest()->paginate(20),
+            'clients' => Client::query()
+                ->where('user_id', auth()->id())
+                ->latest()
+                ->paginate(20),
         ]);
     }
 
@@ -30,6 +33,7 @@ class ClientController extends Controller
 
         Client::query()->create([
             ...$validated,
+            'user_id' => auth()->id(),
             'is_active' => $request->boolean('is_active', true),
         ]);
 
@@ -38,6 +42,8 @@ class ClientController extends Controller
 
     public function edit(Client $client): View
     {
+        $this->ensureOwner($client);
+
         return view('clients.edit', [
             'client' => $client,
         ]);
@@ -45,6 +51,8 @@ class ClientController extends Controller
 
     public function update(UpdateClientRequest $request, Client $client): RedirectResponse
     {
+        $this->ensureOwner($client);
+
         $validated = $request->validated();
 
         $client->update([
@@ -57,8 +65,15 @@ class ClientController extends Controller
 
     public function destroy(Client $client): RedirectResponse
     {
+        $this->ensureOwner($client);
+
         $client->delete();
 
         return redirect()->route('clients.index')->with('success', 'Cliente eliminado.');
+    }
+
+    private function ensureOwner(Client $client): void
+    {
+        abort_unless($client->user_id === auth()->id(), 404);
     }
 }

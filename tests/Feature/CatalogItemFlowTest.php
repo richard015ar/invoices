@@ -12,6 +12,8 @@ class CatalogItemFlowTest extends TestCase
 
     public function test_it_creates_a_catalog_item(): void
     {
+        $user = $this->signIn();
+
         $response = $this->post(route('catalog-items.store'), [
             'name' => 'Monthly retainer',
             'description' => 'Pressbooks development retainer',
@@ -25,12 +27,16 @@ class CatalogItemFlowTest extends TestCase
         $this->assertDatabaseHas('catalog_items', [
             'name' => 'Monthly retainer',
             'is_active' => 1,
+            'user_id' => $user->id,
         ]);
     }
 
     public function test_it_updates_a_catalog_item(): void
     {
+        $user = $this->signIn();
+
         $item = CatalogItem::query()->create([
+            'user_id' => $user->id,
             'name' => 'Monthly retainer',
             'default_unit_price' => 2500,
             'default_tax_rate' => 0,

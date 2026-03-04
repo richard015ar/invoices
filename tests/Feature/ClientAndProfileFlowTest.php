@@ -13,6 +13,8 @@ class ClientAndProfileFlowTest extends TestCase
 
     public function test_it_creates_and_updates_a_client(): void
     {
+        $user = $this->signIn();
+
         $createResponse = $this->post(route('clients.store'), [
             'name' => 'Book Oven Inc (dba Pressbooks)',
             'email' => 'billingadmin@pressbooks.com',
@@ -40,12 +42,16 @@ class ClientAndProfileFlowTest extends TestCase
             'id' => $client->id,
             'email' => 'accounting@pressbooks.com',
             'is_active' => 0,
+            'user_id' => $user->id,
         ]);
     }
 
     public function test_it_updates_issuer_profile(): void
     {
+        $user = $this->signIn();
+
         $profile = IssuerProfile::query()->create([
+            'user_id' => $user->id,
             'name' => 'Ricardo',
             'email' => 'ricardo@example.com',
         ]);
@@ -64,6 +70,7 @@ class ClientAndProfileFlowTest extends TestCase
             'id' => $profile->id,
             'name' => 'Ricardo Aragon',
             'nie' => 'X1234567A',
+            'user_id' => $user->id,
         ]);
     }
 }

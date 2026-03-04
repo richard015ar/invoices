@@ -14,6 +14,7 @@ class Invoice extends Model
     public const STATUSES = ['draft', 'sent', 'paid'];
 
     protected $fillable = [
+        'user_id',
         'invoice_number',
         'issue_date',
         'due_date',
@@ -53,6 +54,11 @@ class Invoice extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function recalculateTotals(): void

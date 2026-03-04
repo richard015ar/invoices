@@ -43,14 +43,19 @@ class StoreInvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'invoice_number' => ['nullable', 'string', 'max:255', 'unique:invoices,invoice_number'],
+            'invoice_number' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('invoices', 'invoice_number')->where('user_id', auth()->id()),
+            ],
             'issue_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:issue_date'],
             'status' => ['required', Rule::in(Invoice::STATUSES)],
             'currency' => ['required', 'string', 'size:3'],
             'template' => ['required', 'string', 'max:50'],
             'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            'client_id' => ['nullable', Rule::exists('clients', 'id')->where('user_id', auth()->id())],
             'from_name' => ['required', 'string', 'max:255'],
             'from_email' => ['nullable', 'email', 'max:255'],
             'from_address' => ['nullable', 'string'],
@@ -62,7 +67,7 @@ class StoreInvoiceRequest extends FormRequest
             'client_details' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.catalog_item_id' => ['nullable', 'integer', 'exists:catalog_items,id'],
+            'lines.*.catalog_item_id' => ['nullable', Rule::exists('catalog_items', 'id')->where('user_id', auth()->id())],
             'lines.*.description' => ['required', 'string', 'max:255'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_price' => ['required', 'numeric', 'min:0'],

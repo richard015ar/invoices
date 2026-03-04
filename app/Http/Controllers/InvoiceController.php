@@ -23,18 +23,23 @@ class InvoiceController extends Controller
     public function index(): View
     {
         return view('invoices.index', [
-            'invoices' => Invoice::query()->latest('issue_date')->latest()->paginate(12),
+            'invoices' => Invoice::query()
+                ->where('user_id', auth()->id())
+                ->latest('issue_date')
+                ->latest()
+                ->paginate(12),
         ]);
     }
 
     public function create(Request $request): View
     {
-        $issuerProfile = IssuerProfileController::profile();
+        $issuerProfile = IssuerProfileController::profile(auth()->id());
         $cloneSource = null;
         $clonedLines = null;
 
         if ($request->filled('clone_from')) {
             $cloneSource = Invoice::query()
+                ->where('user_id', auth()->id())
                 ->with('lines')
                 ->find($request->integer('clone_from'));
 
@@ -71,7 +76,11 @@ class InvoiceController extends Controller
             ]),
             'clonedLines' => $clonedLines,
             'catalogItems' => $this->catalogItemsForForm(),
-            'clients' => Client::query()->where('is_active', true)->orderBy('name')->get(),
+            'clients' => Client::query()
+                ->where('user_id', auth()->id())
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
             'issuerProfile' => $issuerProfile,
             'templates' => config('invoice_templates'),
         ]);
@@ -82,6 +91,7 @@ class InvoiceController extends Controller
         $invoice = DB::transaction(function () use ($request): Invoice {
             $invoice = Invoice::query()->create([
                 ...$this->invoiceAttributes($request->validated()),
+                'user_id' => auth()->id(),
                 'invoice_number' => $request->validated('invoice_number') ?: $this->nextInvoiceNumber(),
             ]);
 
@@ -97,15 +107,16 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice): View
     {
+        $this->ensureOwner($invoice);
         $invoice->load(['lines.catalogItem', 'client']);
-        $issuerProfile = IssuerProfileController::profile();
+        $issuerProfile = IssuerProfileController::profile(auth()->id());
 
         $displayIssuer = [
-            'name' => $invoice->from_name ?: $issuerProfile->name,
-            'email' => $invoice->from_email ?: $issuerProfile->email,
-            'address' => $invoice->from_address ?: $issuerProfile->address,
-            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
-            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+            'name' => $issuerProfile->name,
+            'email' => $issuerProfile->email,
+            'address' => $issuerProfile->address,
+            'nie' => $issuerProfile->nie,
+            'additional_info' => $issuerProfile->additional_info,
         ];
 
         $displayClient = $invoice->client
@@ -132,17 +143,25 @@ class InvoiceController extends Controller
 
     public function edit(Invoice $invoice): View
     {
+        $this->ensureOwner($invoice);
+
         return view('invoices.edit', [
             'invoice' => $invoice->load('lines'),
             'catalogItems' => $this->catalogItemsForForm(),
-            'clients' => Client::query()->where('is_active', true)->orderBy('name')->get(),
-            'issuerProfile' => IssuerProfileController::profile(),
+            'clients' => Client::query()
+                ->where('user_id', auth()->id())
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+            'issuerProfile' => IssuerProfileController::profile(auth()->id()),
             'templates' => config('invoice_templates'),
         ]);
     }
 
     public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
+        $this->ensureOwner($invoice);
+
         DB::transaction(function () use ($request, $invoice): void {
             $invoice->update($this->invoiceAttributes($request->validated()));
             $this->syncLines($invoice, $request->validated('lines', []));
@@ -155,6 +174,8 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice): RedirectResponse
     {
+        $this->ensureOwner($invoice);
+
         $invoice->delete();
 
         return redirect()->route('invoices.index')->with('success', 'Invoice eliminada.');
@@ -162,6 +183,8 @@ class InvoiceController extends Controller
 
     public function updateStatus(Request $request, Invoice $invoice): RedirectResponse
     {
+        $this->ensureOwner($invoice);
+
         $validated = $request->validate([
             'status' => ['required', 'in:' . implode(',', Invoice::STATUSES)],
         ]);
@@ -175,6 +198,8 @@ class InvoiceController extends Controller
 
     public function duplicate(Invoice $invoice): RedirectResponse
     {
+        $this->ensureOwner($invoice);
+
         $copy = DB::transaction(function () use ($invoice): Invoice {
             $invoice->load('lines');
 
@@ -197,6 +222,7 @@ class InvoiceController extends Controller
                     'client_details',
                     'notes',
                 ]),
+                'user_id' => auth()->id(),
                 'invoice_number' => $this->nextInvoiceNumber(),
                 'status' => 'draft',
             ]);
@@ -217,16 +243,17 @@ class InvoiceController extends Controller
 
     public function pdf(Invoice $invoice)
     {
+        $this->ensureOwner($invoice);
         $invoice->load(['lines', 'client']);
         $template = config('invoice_templates.' . $invoice->template);
-        $issuerProfile = IssuerProfileController::profile();
+        $issuerProfile = IssuerProfileController::profile(auth()->id());
 
         $displayIssuer = [
-            'name' => $invoice->from_name ?: $issuerProfile->name,
-            'email' => $invoice->from_email ?: $issuerProfile->email,
-            'address' => $invoice->from_address ?: $issuerProfile->address,
-            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
-            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+            'name' => $issuerProfile->name,
+            'email' => $issuerProfile->email,
+            'address' => $issuerProfile->address,
+            'nie' => $issuerProfile->nie,
+            'additional_info' => $issuerProfile->additional_info,
         ];
 
         $displayClient = $invoice->client
@@ -255,6 +282,8 @@ class InvoiceController extends Controller
 
     public function send(Request $request, Invoice $invoice): RedirectResponse
     {
+        $this->ensureOwner($invoice);
+
         $validated = $request->validate([
             'recipient_email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
@@ -265,14 +294,14 @@ class InvoiceController extends Controller
 
         $invoice->load(['lines', 'client']);
         $template = config('invoice_templates.' . $invoice->template);
-        $issuerProfile = IssuerProfileController::profile();
+        $issuerProfile = IssuerProfileController::profile(auth()->id());
 
         $displayIssuer = [
-            'name' => $invoice->from_name ?: $issuerProfile->name,
-            'email' => $invoice->from_email ?: $issuerProfile->email,
-            'address' => $invoice->from_address ?: $issuerProfile->address,
-            'nie' => $invoice->from_nie ?: $issuerProfile->nie,
-            'additional_info' => $invoice->from_additional_info ?: $issuerProfile->additional_info,
+            'name' => $issuerProfile->name,
+            'email' => $issuerProfile->email,
+            'address' => $issuerProfile->address,
+            'nie' => $issuerProfile->nie,
+            'additional_info' => $issuerProfile->additional_info,
         ];
 
         $displayClient = $invoice->client
@@ -375,7 +404,10 @@ class InvoiceController extends Controller
     private function nextInvoiceNumber(): string
     {
         $year = now()->format('Y');
-        $count = Invoice::query()->whereYear('issue_date', now()->year)->count() + 1;
+        $count = Invoice::query()
+            ->where('user_id', auth()->id())
+            ->whereYear('issue_date', now()->year)
+            ->count() + 1;
 
         return sprintf('INV-%s-%04d', $year, $count);
     }
@@ -383,6 +415,7 @@ class InvoiceController extends Controller
     private function catalogItemsForForm(): Collection
     {
         $items = CatalogItem::query()
+            ->where('user_id', auth()->id())
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -403,6 +436,7 @@ class InvoiceController extends Controller
                 ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
                 ->whereIn('catalog_item_id', $allowanceItemIds)
                 ->whereHas('invoice', function ($query): void {
+                    $query->where('user_id', auth()->id());
                     $query->whereBetween('issue_date', [
                         now()->startOfYear()->toDateString(),
                         now()->endOfYear()->toDateString(),
@@ -432,5 +466,10 @@ class InvoiceController extends Controller
             $item->setAttribute('allowance_currency', config('pb_allowances.currency', 'CAD'));
             $item->setAttribute('allowance_year', now()->year);
         });
+    }
+
+    private function ensureOwner(Invoice $invoice): void
+    {
+        abort_unless($invoice->user_id === auth()->id(), 404);
     }
 }

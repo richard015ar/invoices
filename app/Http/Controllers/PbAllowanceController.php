@@ -24,6 +24,7 @@ class PbAllowanceController extends Controller
         $allowanceNames = $allowanceDefinitions->pluck('name')->all();
 
         $catalogItems = CatalogItem::query()
+            ->where('user_id', auth()->id())
             ->whereIn('name', $allowanceNames)
             ->get(['id', 'name'])
             ->keyBy('name');
@@ -37,6 +38,7 @@ class PbAllowanceController extends Controller
             ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
             ->whereIn('catalog_item_id', $catalogItemIds)
             ->whereHas('invoice', function ($query) use ($startDate, $endDate): void {
+                $query->where('user_id', auth()->id());
                 $query->whereBetween('issue_date', [$startDate, $endDate]);
             })
             ->groupBy('catalog_item_id')
@@ -58,6 +60,7 @@ class PbAllowanceController extends Controller
         })->values();
 
         $invoiceYears = Invoice::query()
+            ->where('user_id', auth()->id())
             ->whereNotNull('issue_date')
             ->pluck('issue_date')
             ->map(fn (string $issueDate): int => Carbon::parse($issueDate)->year)

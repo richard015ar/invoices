@@ -14,12 +14,21 @@
                 <h1>Invoices</h1>
             </div>
             <nav class="nav-links">
-                <a href="{{ route('invoices.index') }}" class="{{ request()->routeIs('invoices.*') ? 'is-active' : '' }}">My invoices</a>
-                <a href="{{ route('catalog-items.index') }}" class="{{ request()->routeIs('catalog-items.*') ? 'is-active' : '' }}">Items reutilizables</a>
-                <a href="{{ route('clients.index') }}" class="{{ request()->routeIs('clients.*') ? 'is-active' : '' }}">Clientes</a>
-                <a href="{{ route('pb-allowances.index') }}" class="{{ request()->routeIs('pb-allowances.*') ? 'is-active' : '' }}">PB Allowances</a>
-                <a href="{{ route('issuer-profile.edit') }}" class="{{ request()->routeIs('issuer-profile.*') ? 'is-active' : '' }}">Mi perfil</a>
-                <a href="{{ route('invoices.create') }}" class="cta">Nueva invoice</a>
+                @auth
+                    <a href="{{ route('invoices.index') }}" class="{{ request()->routeIs('invoices.*') ? 'is-active' : '' }}">My invoices</a>
+                    <a href="{{ route('catalog-items.index') }}" class="{{ request()->routeIs('catalog-items.*') ? 'is-active' : '' }}">Items reutilizables</a>
+                    <a href="{{ route('clients.index') }}" class="{{ request()->routeIs('clients.*') ? 'is-active' : '' }}">Clientes</a>
+                    <a href="{{ route('pb-allowances.index') }}" class="{{ request()->routeIs('pb-allowances.*') ? 'is-active' : '' }}">PB Allowances</a>
+                    <a href="{{ route('issuer-profile.edit') }}" class="{{ request()->routeIs('issuer-profile.*') ? 'is-active' : '' }}">Mi perfil</a>
+                    <a href="{{ route('invoices.create') }}" class="cta">Nueva invoice</a>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="btn-secondary">Salir</button>
+                    </form>
+                @else
+                    <a href="{{ route('login') }}" class="{{ request()->routeIs('login') ? 'is-active' : '' }}">Iniciar sesion</a>
+                    <a href="{{ route('register') }}" class="{{ request()->routeIs('register') ? 'is-active' : '' }}">Crear cuenta</a>
+                @endauth
             </nav>
         </header>
 

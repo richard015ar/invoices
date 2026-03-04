@@ -13,7 +13,10 @@ class CatalogItemController extends Controller
     public function index(): View
     {
         return view('catalog-items.index', [
-            'items' => CatalogItem::query()->latest()->paginate(20),
+            'items' => CatalogItem::query()
+                ->where('user_id', auth()->id())
+                ->latest()
+                ->paginate(20),
         ]);
     }
 
@@ -30,6 +33,7 @@ class CatalogItemController extends Controller
 
         CatalogItem::query()->create([
             ...$validated,
+            'user_id' => auth()->id(),
             'default_tax_rate' => $validated['default_tax_rate'] ?? 0,
             'is_active' => $request->boolean('is_active'),
         ]);
@@ -39,6 +43,8 @@ class CatalogItemController extends Controller
 
     public function edit(CatalogItem $catalogItem): View
     {
+        $this->ensureOwner($catalogItem);
+
         return view('catalog-items.edit', [
             'item' => $catalogItem,
         ]);
@@ -46,6 +52,8 @@ class CatalogItemController extends Controller
 
     public function update(UpdateCatalogItemRequest $request, CatalogItem $catalogItem): RedirectResponse
     {
+        $this->ensureOwner($catalogItem);
+
         $validated = $request->validated();
 
         $catalogItem->update([
@@ -59,8 +67,15 @@ class CatalogItemController extends Controller
 
     public function destroy(CatalogItem $catalogItem): RedirectResponse
     {
+        $this->ensureOwner($catalogItem);
+
         $catalogItem->delete();
 
         return redirect()->route('catalog-items.index')->with('success', 'Item eliminado.');
+    }
+
+    private function ensureOwner(CatalogItem $catalogItem): void
+    {
+        abort_unless($catalogItem->user_id === auth()->id(), 404);
     }
 }
