@@ -8,6 +8,7 @@ use App\Mail\InvoiceEmail;
 use App\Models\CatalogItem;
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\InvoiceAttachment;
 use App\Models\InvoiceLine;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Collection;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
@@ -96,6 +98,7 @@ class InvoiceController extends Controller
             ]);
 
             $this->syncLines($invoice, $request->validated('lines', []));
+            $this->storeAttachments($invoice, $request->file('attachments', []));
 
             return $invoice;
         });
@@ -108,7 +111,7 @@ class InvoiceController extends Controller
     public function show(Invoice $invoice): View
     {
         $this->ensureOwner($invoice);
-        $invoice->load(['lines.catalogItem', 'client']);
+        $invoice->load(['lines.catalogItem', 'client', 'attachments']);
         $issuerProfile = IssuerProfileController::profile(auth()->id());
 
         $displayIssuer = [
@@ -146,7 +149,7 @@ class InvoiceController extends Controller
         $this->ensureOwner($invoice);
 
         return view('invoices.edit', [
-            'invoice' => $invoice->load('lines'),
+            'invoice' => $invoice->load(['lines', 'attachments']),
             'catalogItems' => $this->catalogItemsForForm(),
             'clients' => Client::query()
                 ->where('user_id', auth()->id())
@@ -165,6 +168,8 @@ class InvoiceController extends Controller
         DB::transaction(function () use ($request, $invoice): void {
             $invoice->update($this->invoiceAttributes($request->validated()));
             $this->syncLines($invoice, $request->validated('lines', []));
+            $this->removeAttachments($invoice, $request->validated('remove_attachment_ids', []));
+            $this->storeAttachments($invoice, $request->file('attachments', []));
         });
 
         return redirect()
@@ -241,10 +246,18 @@ class InvoiceController extends Controller
         return redirect()->route('invoices.edit', $copy)->with('success', 'Invoice duplicada.');
     }
 
+    public function downloadAttachment(Invoice $invoice, InvoiceAttachment $attachment)
+    {
+        $this->ensureOwner($invoice);
+        abort_unless($attachment->invoice_id === $invoice->id, 404);
+
+        return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
+    }
+
     public function pdf(Invoice $invoice)
     {
         $this->ensureOwner($invoice);
-        $invoice->load(['lines', 'client']);
+        $invoice->load(['lines', 'client', 'attachments']);
         $template = config('invoice_templates.' . $invoice->template);
         $issuerProfile = IssuerProfileController::profile(auth()->id());
 
@@ -288,8 +301,6 @@ class InvoiceController extends Controller
             'recipient_email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
-            'attachments' => ['nullable', 'array'],
-            'attachments.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp,txt,csv,doc,docx,xls,xlsx'],
         ]);
 
         $invoice->load(['lines', 'client']);
@@ -332,21 +343,27 @@ class InvoiceController extends Controller
             pdfBinary: $pdfBinary
         );
 
-        foreach ($request->file('attachments', []) as $attachment) {
-            if (!$attachment instanceof UploadedFile) {
+        foreach ($invoice->attachments as $attachment) {
+            if (!Storage::disk($attachment->disk)->exists($attachment->path)) {
                 continue;
             }
 
-            $mail->attach(
-                $attachment->getRealPath(),
-                [
-                    'as' => $attachment->getClientOriginalName(),
-                    'mime' => $attachment->getMimeType() ?: 'application/octet-stream',
-                ]
+            $mail->attachData(
+                Storage::disk($attachment->disk)->get($attachment->path),
+                $attachment->original_name,
+                ['mime' => $attachment->mime_type ?: 'application/octet-stream']
             );
         }
 
-        Mail::to($validated['recipient_email'])->send($mail);
+        $copyRecipient = config('mail.invoice_copy_to', 'richard015ar@gmail.com');
+
+        $mailer = Mail::to($validated['recipient_email']);
+
+        if (!empty($copyRecipient)) {
+            $mailer->bcc($copyRecipient);
+        }
+
+        $mailer->send($mail);
 
         return back()->with('success', 'Invoice enviada a ' . $validated['recipient_email'] . '.');
     }
@@ -471,5 +488,46 @@ class InvoiceController extends Controller
     private function ensureOwner(Invoice $invoice): void
     {
         abort_unless($invoice->user_id === auth()->id(), 404);
+    }
+
+    /**
+     * @param  array<int, UploadedFile>  $attachments
+     */
+    private function storeAttachments(Invoice $invoice, array $attachments): void
+    {
+        foreach ($attachments as $attachment) {
+            if (!$attachment instanceof UploadedFile) {
+                continue;
+            }
+
+            $path = $attachment->store('invoice-attachments/' . $invoice->id, 'local');
+
+            $invoice->attachments()->create([
+                'disk' => 'local',
+                'path' => $path,
+                'original_name' => $attachment->getClientOriginalName(),
+                'mime_type' => $attachment->getClientMimeType(),
+                'size' => $attachment->getSize() ?: 0,
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<int, int|string>  $attachmentIds
+     */
+    private function removeAttachments(Invoice $invoice, array $attachmentIds): void
+    {
+        if (empty($attachmentIds)) {
+            return;
+        }
+
+        $attachments = $invoice->attachments()
+            ->whereIn('id', $attachmentIds)
+            ->get();
+
+        foreach ($attachments as $attachment) {
+            Storage::disk($attachment->disk)->delete($attachment->path);
+            $attachment->delete();
+        }
     }
 }

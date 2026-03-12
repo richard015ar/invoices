@@ -115,4 +115,6 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    'invoice_copy_to' => env('MAIL_INVOICE_COPY_TO', 'richard015ar@gmail.com'),
+
 ];

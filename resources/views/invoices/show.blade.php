@@ -46,16 +46,9 @@
                 Body (texto simple)
                 <textarea name="body" rows="6">{{ old('body', "Hi,\n\nPlease find attached invoice {$invoice->invoice_number}.\n\nThanks,") }}</textarea>
             </label>
-            <label>
-                Adjuntar archivos (opcional)
-                <input
-                    type="file"
-                    name="attachments[]"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"
-                />
-                <small>Se adjuntan junto al PDF de la invoice. Max 10MB por archivo.</small>
-            </label>
+            <p class="send-note">
+                Se enviara el PDF de la invoice y {{ $invoice->attachments->count() }} documento(s) asociado(s).
+            </p>
             <div>
                 <button class="btn-primary" type="submit">Enviar email con PDF</button>
             </div>
@@ -134,6 +127,21 @@
                 <p>{{ $invoice->notes }}</p>
             </div>
         @endif
+
+        <div class="notes">
+            <h4>Documentos asociados</h4>
+            @if ($invoice->attachments->isEmpty())
+                <p>No hay documentos asociados a esta invoice.</p>
+            @else
+                <div class="stack">
+                    @foreach ($invoice->attachments as $attachment)
+                        <a href="{{ route('invoices.attachments.download', [$invoice, $attachment]) }}" class="attachment-link">
+                            {{ $attachment->original_name }}
+                        </a>
+                    @endforeach
+                </div>
+            @endif
+        </div>
     </article>
 </section>
 @endsection

@@ -284,6 +284,46 @@ th, td {
     font-size: 0.78rem;
 }
 
+.send-note,
+.empty-state {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.attachment-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.attachment-row small {
+    display: block;
+    margin-top: 0.15rem;
+    color: #64748b;
+}
+
+.attachment-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.attachment-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 10px;
+    background: #fff;
+}
+
 .auth-panel {
     max-width: 520px;
     margin-inline: auto;

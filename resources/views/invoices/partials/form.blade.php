@@ -23,7 +23,7 @@
         <h2>{{ $title }}</h2>
     </div>
 
-    <form action="{{ $action }}" method="POST" class="stack-lg">
+    <form action="{{ $action }}" method="POST" class="stack-lg" enctype="multipart/form-data">
         @csrf
         @if ($method !== 'POST')
             @method($method)
@@ -151,7 +151,7 @@
                         <div class="grid cols-5">
                             <label>
                                 Catalogo
-                                <select name="lines[{{ $index }}][catalog_item_id]" data-catalog-select>
+                                <select name="lines[{{ $index }}][catalog_item_id]" data-name="catalog_item_id" data-catalog-select>
                                     <option value="">Manual</option>
                                     @foreach ($catalogItems as $item)
                                         <option value="{{ $item->id }}" @selected((string) ($line['catalog_item_id'] ?? '') === (string) $item->id)>{{ $item->name }}</option>
@@ -160,21 +160,21 @@
                             </label>
                             <label class="span-2">
                                 Descripcion
-                                <input name="lines[{{ $index }}][description]" required value="{{ $line['description'] }}" data-description />
+                                <input name="lines[{{ $index }}][description]" data-name="description" required value="{{ $line['description'] }}" data-description />
                             </label>
                             <label>
                                 Cantidad
-                                <input type="number" step="0.01" min="0" name="lines[{{ $index }}][quantity]" required value="{{ $line['quantity'] }}" data-quantity />
+                                <input type="number" step="0.01" min="0" name="lines[{{ $index }}][quantity]" data-name="quantity" required value="{{ $line['quantity'] }}" data-quantity />
                             </label>
                             <label>
                                 Precio
-                                <input type="number" step="0.01" min="0" name="lines[{{ $index }}][unit_price]" required value="{{ $line['unit_price'] }}" data-unit-price />
+                                <input type="number" step="0.01" min="0" name="lines[{{ $index }}][unit_price]" data-name="unit_price" required value="{{ $line['unit_price'] }}" data-unit-price />
                             </label>
                         </div>
                         <div class="grid cols-5">
                             <label>
                                 Impuesto %
-                                <input type="number" step="0.01" min="0" max="100" name="lines[{{ $index }}][tax_rate]" value="{{ $line['tax_rate'] }}" data-tax-rate />
+                                <input type="number" step="0.01" min="0" max="100" name="lines[{{ $index }}][tax_rate]" data-name="tax_rate" value="{{ $line['tax_rate'] }}" data-tax-rate />
                             </label>
                             <div class="line-total">Total: <span data-line-total>0.00</span></div>
                             <div class="allowance-hint" data-allowance-hint hidden></div>
@@ -189,6 +189,45 @@
             Notas
             <textarea name="notes" rows="3">{{ old('notes', $invoice->notes) }}</textarea>
         </label>
+
+        <div class="panel nested">
+            <div class="panel-head">
+                <h3>Documentos asociados</h3>
+            </div>
+
+            @if ($invoice->exists && $invoice->attachments->isNotEmpty())
+                <div class="stack">
+                    @foreach ($invoice->attachments as $attachment)
+                        <label class="attachment-row">
+                            <span>
+                                <strong>{{ $attachment->original_name }}</strong>
+                                <small>{{ number_format($attachment->size / 1024, 1) }} KB</small>
+                            </span>
+                            <span class="attachment-actions">
+                                <a href="{{ route('invoices.attachments.download', [$invoice, $attachment]) }}">Descargar</a>
+                                <span>
+                                    <input type="checkbox" name="remove_attachment_ids[]" value="{{ $attachment->id }}">
+                                    Eliminar
+                                </span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+            @elseif ($invoice->exists)
+                <p class="empty-state">No hay documentos asociados todavia.</p>
+            @endif
+
+            <label>
+                Agregar archivos
+                <input
+                    type="file"
+                    name="attachments[]"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                />
+                <small>Quedan guardados en la invoice y se adjuntan automaticamente al enviar. Max 10MB por archivo.</small>
+            </label>
+        </div>
 
         <div class="panel nested totals">
             <p>Subtotal: <strong data-subtotal>0.00</strong></p>
@@ -340,15 +379,10 @@
         });
 
         [...linesContainer.querySelectorAll('[data-line]')].forEach((line) => {
-            line.querySelectorAll('select, input, textarea').forEach((input) => {
-                if (!input.dataset.name && input.name) {
-                    const matches = input.name.match(/\[(.*?)\]$/);
-                    if (matches) input.dataset.name = matches[1];
-                }
-            });
             attachLineEvents(line);
         });
 
+        updateNames();
         formRoot.querySelector('input[name="currency"]')?.addEventListener('input', recalc);
 
         const applyClientData = (client, overwrite = true) => {

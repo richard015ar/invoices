@@ -51,6 +51,11 @@ class Invoice extends Model
         return $this->hasMany(InvoiceLine::class)->orderBy('position');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(InvoiceAttachment::class)->latest();
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
