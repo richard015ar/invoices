@@ -327,7 +327,7 @@ class InvoiceFlowTest extends TestCase
         ]);
 
         $path = UploadedFile::fake()->create('supporting-doc.pdf', 200, 'application/pdf')
-            ->store('invoice-attachments/' . $invoice->id, 'local');
+            ->store('invoice-attachments/'.$invoice->id, 'local');
 
         $invoice->attachments()->create([
             'disk' => 'local',
@@ -382,7 +382,7 @@ class InvoiceFlowTest extends TestCase
         ]);
 
         $path = UploadedFile::fake()->image('receipt-2.jpg')
-            ->store('invoice-attachments/' . $invoice->id, 'local');
+            ->store('invoice-attachments/'.$invoice->id, 'local');
 
         $invoice->attachments()->create([
             'disk' => 'local',

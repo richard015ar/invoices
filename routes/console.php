@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Invoice;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -10,17 +11,27 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function (string $path): void {
+Artisan::command('invoices:import-legacy-pdfs {path=storage/imports} {--user=}', function (string $path): void {
     $fullPath = base_path($path);
-    $files = glob($fullPath . '/*.pdf') ?: [];
+    $files = glob($fullPath.'/*.pdf') ?: [];
     sort($files);
 
     if ($files === []) {
-        $this->warn('No PDF files found at: ' . $fullPath);
+        $this->warn('No PDF files found at: '.$fullPath);
+
         return;
     }
 
-    $parser = new Parser();
+    $parser = new Parser;
+    $owner = $this->option('user')
+        ? User::query()->find($this->option('user'))
+        : User::query()->first();
+
+    if (! $owner) {
+        $this->error('No user available for imported invoices.');
+
+        return;
+    }
 
     $extractText = function (string $file) use ($parser): string {
         $text = '';
@@ -35,11 +46,11 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
             return preg_replace('/\s+/', ' ', $text) ?? '';
         }
 
-        $tmpBase = '/tmp/invoice_ocr_' . md5($file . microtime(true));
-        $png = $tmpBase . '.png';
-        @exec('pdftoppm -f 1 -singlefile -png ' . escapeshellarg($file) . ' ' . escapeshellarg($tmpBase));
+        $tmpBase = '/tmp/invoice_ocr_'.md5($file.microtime(true));
+        $png = $tmpBase.'.png';
+        @exec('pdftoppm -f 1 -singlefile -png '.escapeshellarg($file).' '.escapeshellarg($tmpBase));
         $output = [];
-        @exec('tesseract ' . escapeshellarg($png) . ' stdout -l eng 2>/dev/null', $output);
+        @exec('tesseract '.escapeshellarg($png).' stdout -l eng 2>/dev/null', $output);
         @unlink($png);
 
         return preg_replace('/\s+/', ' ', trim(implode(' ', $output))) ?? '';
@@ -104,9 +115,9 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
 
     foreach ($files as $file) {
         $basename = basename($file);
-        $marker = '[legacy-import:' . $basename . ']';
+        $marker = '[legacy-import:'.$basename.']';
 
-        $existing = Invoice::query()->where('notes', 'like', '%' . $marker . '%')->first();
+        $existing = Invoice::query()->where('notes', 'like', '%'.$marker.'%')->first();
 
         $text = $extractText($file);
         $text = preg_replace('/\s+/', ' ', $text) ?? '';
@@ -124,22 +135,24 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
         $total = $parseAmount($text);
 
         if (! $issueDate && preg_match('/(Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|Jan(?:uary)?|Feb(?:ruary)?)\s+([0-9]{4})/i', $basename, $monthYear)) {
-            $issueDate = $parseDate('1 ' . $monthYear[1] . ' ' . $monthYear[2]);
+            $issueDate = $parseDate('1 '.$monthYear[1].' '.$monthYear[2]);
         }
 
         $issueDate = $issueDate ?: now();
         $dueDate = $dueDate ?: (clone $issueDate)->addDays(7);
         $currency = str_contains($text, 'C$') ? 'CAD' : 'USD';
-        $invoiceNumber = 'LEG-' . $issueDate->format('Y') . '-' . strtoupper(substr(md5($basename), 0, 6));
+        $invoiceNumber = 'LEG-'.$issueDate->format('Y').'-'.strtoupper(substr(md5($basename), 0, 6));
 
         if ($existing) {
             if ((float) $existing->grand_total > 0 || $total <= 0) {
                 $skipped++;
-                $this->line('Skipped (already imported): ' . $basename);
+                $this->line('Skipped (already imported): '.$basename);
+
                 continue;
             }
 
             $existing->update([
+                'user_id' => $existing->user_id ?: $owner->id,
                 'issue_date' => $issueDate->toDateString(),
                 'due_date' => $dueDate->toDateString(),
                 'currency' => $currency,
@@ -153,7 +166,7 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
             $existing->lines()->delete();
             $existing->lines()->create([
                 'position' => 0,
-                'description' => 'Legacy invoice import - ' . pathinfo($basename, PATHINFO_FILENAME),
+                'description' => 'Legacy invoice import - '.pathinfo($basename, PATHINFO_FILENAME),
                 'quantity' => 1,
                 'unit_price' => round($total, 2),
                 'tax_rate' => 0,
@@ -161,11 +174,13 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
             ]);
 
             $imported++;
-            $this->info("Updated: {$basename} -> {$existing->invoice_number} ({$currency} " . number_format($total, 2) . ')');
+            $this->info("Updated: {$basename} -> {$existing->invoice_number} ({$currency} ".number_format($total, 2).')');
+
             continue;
         }
 
         $invoice = Invoice::query()->create([
+            'user_id' => $owner->id,
             'invoice_number' => $invoiceNumber,
             'issue_date' => $issueDate->toDateString(),
             'due_date' => $dueDate->toDateString(),
@@ -180,7 +195,7 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
             'client_email' => 'contact@pressbooks.com',
             'client_address' => null,
             'client_details' => null,
-            'notes' => $marker . ' Imported automatically from legacy PDF: ' . $basename,
+            'notes' => $marker.' Imported automatically from legacy PDF: '.$basename,
             'subtotal' => round($total, 2),
             'tax_total' => 0,
             'grand_total' => round($total, 2),
@@ -188,7 +203,7 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
 
         $invoice->lines()->create([
             'position' => 0,
-            'description' => 'Legacy invoice import - ' . pathinfo($basename, PATHINFO_FILENAME),
+            'description' => 'Legacy invoice import - '.pathinfo($basename, PATHINFO_FILENAME),
             'quantity' => 1,
             'unit_price' => round($total, 2),
             'tax_rate' => 0,
@@ -196,7 +211,7 @@ Artisan::command('invoices:import-legacy-pdfs {path=storage/imports}', function 
         ]);
 
         $imported++;
-        $this->info("Imported: {$basename} -> {$invoiceNumber} ({$currency} " . number_format($total, 2) . ')');
+        $this->info("Imported: {$basename} -> {$invoiceNumber} ({$currency} ".number_format($total, 2).')');
     }
 
     $this->newLine();

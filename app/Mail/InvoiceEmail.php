@@ -19,8 +19,7 @@ class InvoiceEmail extends Mailable
         public string $subjectLine,
         public string $messageBody,
         private string $pdfBinary
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {
@@ -40,7 +39,7 @@ class InvoiceEmail extends Mailable
     {
         return $this->attachData(
             $this->pdfBinary,
-            $this->invoice->invoice_number . '.pdf',
+            $this->invoice->invoice_number.'.pdf',
             ['mime' => 'application/pdf']
         );
     }

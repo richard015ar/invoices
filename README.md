@@ -1,97 +1,79 @@
 # Invoices App
 
-A Laravel 12 + PHP 8.3 application to create, manage, and export professional invoices quickly.
+Laravel 12 + PHP 8.3 application for creating, managing, exporting, and emailing invoices with per-user data isolation.
 
-## Features
+## Core capabilities
 
-- Invoice CRUD (create, edit, view, delete)
-- Inline status update from `My invoices` table (`draft`, `sent`, `paid`)
-- Clone invoice into a prefilled `New invoice` form
-- Reusable catalog items (CRUD)
-- PDF export with styled templates
-- Multiple visual templates + accent color
-- Invoice history and totals
-- Laravel Sail support (MySQL, Redis, Mailpit)
+- Authentication with separate data per user
+- Invoice CRUD with reusable line items
+- Client management with autofill into invoices
+- Issuer profile management per user
+- PDF export and email delivery
+- Persistent invoice attachments
+- PB allowances dashboard by year
+- Laravel Sail development environment
 
-## Tech Stack
+## Stack
 
 - Laravel 12
 - PHP 8.3
 - MySQL 8.4
 - Redis
-- Blade + CSS
-- DomPDF (`barryvdh/laravel-dompdf`)
+- Blade
+- DomPDF
+- Laravel Pint
 
-## Requirements
-
-- Docker Desktop or OrbStack
-- Composer (only needed if you won't use Sail for dependency management)
-
-## Quick Start (Sail - Recommended)
-
-1. Clone the repository
+## Quick start
 
 ```bash
 git clone git@github.com:richard015ar/invoices.git
 cd invoices
-```
-
-2. Install PHP dependencies
-
-```bash
 composer install
-```
-
-3. Configure environment
-
-```bash
 cp .env.example .env
-```
-
-4. Start containers
-
-```bash
 ./vendor/bin/sail up -d
-```
-
-5. Generate app key and run migrations
-
-```bash
 ./vendor/bin/sail artisan key:generate
 ./vendor/bin/sail artisan migrate
 ```
 
-6. Open the app
+Open:
 
-- App: <http://localhost/invoices>
-- Mailpit: <http://localhost:8025>
+- App: [http://localhost:8080](http://localhost:8080)
+- Mailpit: [http://localhost:8025](http://localhost:8025)
 
-## Useful Commands
+## Daily commands
 
 ```bash
-# Run tests
-./vendor/bin/sail artisan test
-
-# Stop containers
+./vendor/bin/sail up -d
 ./vendor/bin/sail down
-
-# Restart app container
-./vendor/bin/sail restart laravel.test
+./vendor/bin/sail artisan test
+composer lint
+composer format
 ```
 
-## Notes
+## Email setup
 
-- Main entry route (`/`) redirects to `/invoices`.
-- Invoice PDFs are generated server-side using DomPDF.
-- Import/maintenance scripts are located in `scripts/`.
+Configure SMTP in `.env`. Gmail should use an app password instead of the account password.
 
-## Commit Convention
+Relevant variables:
 
-This repository uses **Conventional Commits**.
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_ENCRYPTION=tls
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password
+MAIL_FROM_ADDRESS=your_email@gmail.com
+MAIL_FROM_NAME="Your Name"
+MAIL_INVOICE_COPY_TO=richard015ar@gmail.com
+```
 
-Examples:
+## Documentation
 
-- `feat: add inline invoice status chips`
-- `fix: handle nullable catalog item tax rate`
-- `docs: add sail setup instructions`
+- [docs/usage.md](/Users/ricardoaragon/development/invoices-app/docs/usage.md)
+- [docs/architecture.md](/Users/ricardoaragon/development/invoices-app/docs/architecture.md)
+- [docs/development.md](/Users/ricardoaragon/development/invoices-app/docs/development.md)
 
+## Commit style
+
+This repository uses Conventional Commits.

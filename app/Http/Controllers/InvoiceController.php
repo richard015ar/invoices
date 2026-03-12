@@ -4,24 +4,29 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreInvoiceRequest;
 use App\Http\Requests\UpdateInvoiceRequest;
-use App\Mail\InvoiceEmail;
 use App\Models\CatalogItem;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceAttachment;
 use App\Models\InvoiceLine;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\InvoiceAttachmentService;
+use App\Services\InvoiceDeliveryService;
+use App\Services\InvoiceViewDataFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
 {
+    public function __construct(
+        private readonly InvoiceAttachmentService $attachmentService,
+        private readonly InvoiceDeliveryService $deliveryService,
+        private readonly InvoiceViewDataFactory $viewDataFactory,
+    ) {}
+
     public function index(): View
     {
         return view('invoices.index', [
@@ -98,7 +103,7 @@ class InvoiceController extends Controller
             ]);
 
             $this->syncLines($invoice, $request->validated('lines', []));
-            $this->storeAttachments($invoice, $request->file('attachments', []));
+            $this->attachmentService->storeForInvoice($invoice, $request->file('attachments', []));
 
             return $invoice;
         });
@@ -111,36 +116,15 @@ class InvoiceController extends Controller
     public function show(Invoice $invoice): View
     {
         $this->ensureOwner($invoice);
+
         $invoice->load(['lines.catalogItem', 'client', 'attachments']);
         $issuerProfile = IssuerProfileController::profile(auth()->id());
 
-        $displayIssuer = [
-            'name' => $issuerProfile->name,
-            'email' => $issuerProfile->email,
-            'address' => $issuerProfile->address,
-            'nie' => $issuerProfile->nie,
-            'additional_info' => $issuerProfile->additional_info,
-        ];
-
-        $displayClient = $invoice->client
-            ? [
-                'name' => $invoice->client->name,
-                'email' => $invoice->client->email,
-                'address' => $invoice->client->address,
-                'details' => $invoice->client->details,
-            ]
-            : [
-                'name' => $invoice->client_name,
-                'email' => $invoice->client_email,
-                'address' => $invoice->client_address,
-                'details' => $invoice->client_details,
-            ];
-
         return view('invoices.show', [
             'invoice' => $invoice,
-            'template' => config('invoice_templates.' . $invoice->template),
-            'displayIssuer' => $displayIssuer,
-            'displayClient' => $displayClient,
+            'template' => config('invoice_templates.'.$invoice->template),
+            'displayIssuer' => $this->viewDataFactory->issuer($issuerProfile),
+            'displayClient' => $this->viewDataFactory->client($invoice),
         ]);
     }
 
@@ -168,8 +152,8 @@ class InvoiceController extends Controller
         DB::transaction(function () use ($request, $invoice): void {
             $invoice->update($this->invoiceAttributes($request->validated()));
             $this->syncLines($invoice, $request->validated('lines', []));
-            $this->removeAttachments($invoice, $request->validated('remove_attachment_ids', []));
-            $this->storeAttachments($invoice, $request->file('attachments', []));
+            $this->attachmentService->removeFromInvoice($invoice, $request->validated('remove_attachment_ids', []));
+            $this->attachmentService->storeForInvoice($invoice, $request->file('attachments', []));
         });
 
         return redirect()
@@ -191,14 +175,14 @@ class InvoiceController extends Controller
         $this->ensureOwner($invoice);
 
         $validated = $request->validate([
-            'status' => ['required', 'in:' . implode(',', Invoice::STATUSES)],
+            'status' => ['required', 'in:'.implode(',', Invoice::STATUSES)],
         ]);
 
         $invoice->update([
             'status' => $validated['status'],
         ]);
 
-        return back()->with('success', 'Estado actualizado a ' . strtoupper($validated['status']) . '.');
+        return back()->with('success', 'Estado actualizado a '.strtoupper($validated['status']).'.');
     }
 
     public function duplicate(Invoice $invoice): RedirectResponse
@@ -258,39 +242,17 @@ class InvoiceController extends Controller
     {
         $this->ensureOwner($invoice);
         $invoice->load(['lines', 'client', 'attachments']);
-        $template = config('invoice_templates.' . $invoice->template);
+
         $issuerProfile = IssuerProfileController::profile(auth()->id());
 
-        $displayIssuer = [
-            'name' => $issuerProfile->name,
-            'email' => $issuerProfile->email,
-            'address' => $issuerProfile->address,
-            'nie' => $issuerProfile->nie,
-            'additional_info' => $issuerProfile->additional_info,
-        ];
-
-        $displayClient = $invoice->client
-            ? [
-                'name' => $invoice->client->name,
-                'email' => $invoice->client->email,
-                'address' => $invoice->client->address,
-                'details' => $invoice->client->details,
+        return response(
+            $this->deliveryService->pdfBinary($invoice, $issuerProfile),
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$invoice->invoice_number.'.pdf"',
             ]
-            : [
-                'name' => $invoice->client_name,
-                'email' => $invoice->client_email,
-                'address' => $invoice->client_address,
-                'details' => $invoice->client_details,
-            ];
-
-        $pdf = Pdf::loadView('invoices.pdf', [
-            'invoice' => $invoice,
-            'template' => $template,
-            'displayIssuer' => $displayIssuer,
-            'displayClient' => $displayClient,
-        ]);
-
-        return $pdf->download($invoice->invoice_number . '.pdf');
+        );
     }
 
     public function send(Request $request, Invoice $invoice): RedirectResponse
@@ -303,69 +265,18 @@ class InvoiceController extends Controller
             'body' => ['nullable', 'string'],
         ]);
 
-        $invoice->load(['lines', 'client']);
-        $template = config('invoice_templates.' . $invoice->template);
+        $invoice->load(['lines', 'client', 'attachments']);
         $issuerProfile = IssuerProfileController::profile(auth()->id());
 
-        $displayIssuer = [
-            'name' => $issuerProfile->name,
-            'email' => $issuerProfile->email,
-            'address' => $issuerProfile->address,
-            'nie' => $issuerProfile->nie,
-            'additional_info' => $issuerProfile->additional_info,
-        ];
-
-        $displayClient = $invoice->client
-            ? [
-                'name' => $invoice->client->name,
-                'email' => $invoice->client->email,
-                'address' => $invoice->client->address,
-                'details' => $invoice->client->details,
-            ]
-            : [
-                'name' => $invoice->client_name,
-                'email' => $invoice->client_email,
-                'address' => $invoice->client_address,
-                'details' => $invoice->client_details,
-            ];
-
-        $pdfBinary = Pdf::loadView('invoices.pdf', [
-            'invoice' => $invoice,
-            'template' => $template,
-            'displayIssuer' => $displayIssuer,
-            'displayClient' => $displayClient,
-        ])->output();
-
-        $mail = new InvoiceEmail(
-            invoice: $invoice,
-            subjectLine: $validated['subject'],
-            messageBody: (string) ($validated['body'] ?? ''),
-            pdfBinary: $pdfBinary
+        $this->deliveryService->send(
+            $invoice,
+            $issuerProfile,
+            $validated['recipient_email'],
+            $validated['subject'],
+            (string) ($validated['body'] ?? ''),
         );
 
-        foreach ($invoice->attachments as $attachment) {
-            if (!Storage::disk($attachment->disk)->exists($attachment->path)) {
-                continue;
-            }
-
-            $mail->attachData(
-                Storage::disk($attachment->disk)->get($attachment->path),
-                $attachment->original_name,
-                ['mime' => $attachment->mime_type ?: 'application/octet-stream']
-            );
-        }
-
-        $copyRecipient = config('mail.invoice_copy_to', 'richard015ar@gmail.com');
-
-        $mailer = Mail::to($validated['recipient_email']);
-
-        if (!empty($copyRecipient)) {
-            $mailer->bcc($copyRecipient);
-        }
-
-        $mailer->send($mail);
-
-        return back()->with('success', 'Invoice enviada a ' . $validated['recipient_email'] . '.');
+        return back()->with('success', 'Invoice enviada a '.$validated['recipient_email'].'.');
     }
 
     private function invoiceAttributes(array $validated): array
@@ -448,7 +359,7 @@ class InvoiceController extends Controller
 
         $usageByCatalogItemId = [];
 
-        if (!empty($allowanceItemIds)) {
+        if ($allowanceItemIds !== []) {
             $usageByCatalogItemId = InvoiceLine::query()
                 ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
                 ->whereIn('catalog_item_id', $allowanceItemIds)
@@ -467,7 +378,7 @@ class InvoiceController extends Controller
         return $items->each(function (CatalogItem $item) use ($allowanceByName, $usageByCatalogItemId): void {
             $definition = $allowanceByName->get($item->name);
 
-            if (!$definition) {
+            if (! $definition) {
                 $item->setAttribute('allowance_is_tracked', false);
 
                 return;
@@ -488,46 +399,5 @@ class InvoiceController extends Controller
     private function ensureOwner(Invoice $invoice): void
     {
         abort_unless($invoice->user_id === auth()->id(), 404);
-    }
-
-    /**
-     * @param  array<int, UploadedFile>  $attachments
-     */
-    private function storeAttachments(Invoice $invoice, array $attachments): void
-    {
-        foreach ($attachments as $attachment) {
-            if (!$attachment instanceof UploadedFile) {
-                continue;
-            }
-
-            $path = $attachment->store('invoice-attachments/' . $invoice->id, 'local');
-
-            $invoice->attachments()->create([
-                'disk' => 'local',
-                'path' => $path,
-                'original_name' => $attachment->getClientOriginalName(),
-                'mime_type' => $attachment->getClientMimeType(),
-                'size' => $attachment->getSize() ?: 0,
-            ]);
-        }
-    }
-
-    /**
-     * @param  array<int, int|string>  $attachmentIds
-     */
-    private function removeAttachments(Invoice $invoice, array $attachmentIds): void
-    {
-        if (empty($attachmentIds)) {
-            return;
-        }
-
-        $attachments = $invoice->attachments()
-            ->whereIn('id', $attachmentIds)
-            ->get();
-
-        foreach ($attachments as $attachment) {
-            Storage::disk($attachment->disk)->delete($attachment->path);
-            $attachment->delete();
-        }
     }
 }

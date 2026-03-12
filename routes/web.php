@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\CatalogItemController;
-use App\Http\Controllers\ClientController;
-use App\Http\Controllers\IssuerProfileController;
-use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\PbAllowanceController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\CatalogItemController;
+use App\Http\Controllers\ClientController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\IssuerProfileController;
+use App\Http\Controllers\PbAllowanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
