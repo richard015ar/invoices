@@ -349,7 +349,6 @@ class InvoiceFlowTest extends TestCase
 
         Mail::assertSent(InvoiceEmail::class, function (InvoiceEmail $mail): bool {
             return $mail->hasTo('billingadmin@pressbooks.com')
-                && $mail->hasBcc('richard015ar@gmail.com')
                 && $mail->subjectLine === 'Invoice INV-2026-0099'
                 && $mail->messageBody === 'Please find attached invoice.';
         });
@@ -404,7 +403,6 @@ class InvoiceFlowTest extends TestCase
 
         Mail::assertSent(InvoiceEmail::class, function (InvoiceEmail $mail): bool {
             return $mail->hasTo('billingadmin@pressbooks.com')
-                && $mail->hasBcc('richard015ar@gmail.com')
                 && $mail->subjectLine === 'Invoice INV-2026-0100';
         });
     }

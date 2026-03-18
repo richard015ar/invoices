@@ -2,38 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\PreparesInvoiceLines;
 use App\Models\Invoice;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateInvoiceRequest extends FormRequest
 {
-    protected function prepareForValidation(): void
-    {
-        $lines = collect($this->input('lines', []))
-            ->map(function ($line): array {
-                $line = is_array($line) ? $line : [];
-
-                return [
-                    'catalog_item_id' => $line['catalog_item_id'] ?? null,
-                    'description' => trim((string) ($line['description'] ?? '')),
-                    'quantity' => $line['quantity'] ?? null,
-                    'unit_price' => $line['unit_price'] ?? null,
-                    'tax_rate' => $line['tax_rate'] ?? null,
-                ];
-            })
-            ->filter(function (array $line): bool {
-                return $line['catalog_item_id'] !== null
-                    || $line['description'] !== ''
-                    || $line['quantity'] !== null
-                    || $line['unit_price'] !== null
-                    || $line['tax_rate'] !== null;
-            })
-            ->values()
-            ->all();
-
-        $this->merge(['lines' => $lines]);
-    }
+    use PreparesInvoiceLines;
 
     public function authorize(): bool
     {
@@ -43,6 +19,7 @@ class UpdateInvoiceRequest extends FormRequest
     public function rules(): array
     {
         $invoice = $this->route('invoice');
+        $issueDate = $this->input('issue_date');
 
         return [
             'invoice_number' => [
@@ -54,10 +31,10 @@ class UpdateInvoiceRequest extends FormRequest
                     ->ignore($invoice?->id),
             ],
             'issue_date' => ['required', 'date'],
-            'due_date' => ['nullable', 'date', 'after_or_equal:issue_date'],
+            'due_date' => ['nullable', 'date', ...($issueDate ? ['after_or_equal:'.$issueDate] : [])],
             'status' => ['required', Rule::in(Invoice::STATUSES)],
             'currency' => ['required', 'string', 'size:3'],
-            'template' => ['required', 'string', 'max:50'],
+            'template' => ['required', 'string', Rule::in(array_keys(config('invoice_templates', [])))],
             'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'client_id' => ['nullable', Rule::exists('clients', 'id')->where('user_id', auth()->id())],
             'from_name' => ['required', 'string', 'max:255'],

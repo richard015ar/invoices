@@ -31,8 +31,8 @@ class PbAllowanceController extends Controller
 
         $catalogItemIds = $catalogItems->pluck('id')->values()->all();
 
-        $startDate = now()->setYear($selectedYear)->startOfYear()->toDateString();
-        $endDate = now()->setYear($selectedYear)->endOfYear()->toDateString();
+        $startDate = Carbon::create($selectedYear)->startOfYear()->toDateString();
+        $endDate = Carbon::create($selectedYear)->endOfYear()->toDateString();
 
         $usageByCatalogItemId = InvoiceLine::query()
             ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
@@ -63,7 +63,7 @@ class PbAllowanceController extends Controller
             ->where('user_id', auth()->id())
             ->whereNotNull('issue_date')
             ->pluck('issue_date')
-            ->map(fn (string $issueDate): int => Carbon::parse($issueDate)->year)
+            ->map(fn (string $issueDate): int => (int) substr($issueDate, 0, 4))
             ->unique()
             ->sort()
             ->values();

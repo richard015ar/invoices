@@ -9,15 +9,18 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceAttachment;
 use App\Models\InvoiceLine;
+use App\Models\IssuerProfile;
 use App\Services\InvoiceAttachmentService;
 use App\Services\InvoiceDeliveryService;
 use App\Services\InvoiceViewDataFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InvoiceController extends Controller
 {
@@ -40,7 +43,7 @@ class InvoiceController extends Controller
 
     public function create(Request $request): View
     {
-        $issuerProfile = IssuerProfileController::profile(auth()->id());
+        $issuerProfile = IssuerProfile::forUser(auth()->id());
         $cloneSource = null;
         $clonedLines = null;
 
@@ -118,7 +121,7 @@ class InvoiceController extends Controller
         $this->ensureOwner($invoice);
 
         $invoice->load(['lines.catalogItem', 'client', 'attachments']);
-        $issuerProfile = IssuerProfileController::profile(auth()->id());
+        $issuerProfile = IssuerProfile::forUser(auth()->id());
 
         return view('invoices.show', [
             'invoice' => $invoice,
@@ -140,7 +143,7 @@ class InvoiceController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(),
-            'issuerProfile' => IssuerProfileController::profile(auth()->id()),
+            'issuerProfile' => IssuerProfile::forUser(auth()->id()),
             'templates' => config('invoice_templates'),
         ]);
     }
@@ -230,7 +233,7 @@ class InvoiceController extends Controller
         return redirect()->route('invoices.edit', $copy)->with('success', 'Invoice duplicada.');
     }
 
-    public function downloadAttachment(Invoice $invoice, InvoiceAttachment $attachment)
+    public function downloadAttachment(Invoice $invoice, InvoiceAttachment $attachment): StreamedResponse|Response
     {
         $this->ensureOwner($invoice);
         abort_unless($attachment->invoice_id === $invoice->id, 404);
@@ -238,12 +241,12 @@ class InvoiceController extends Controller
         return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
     }
 
-    public function pdf(Invoice $invoice)
+    public function pdf(Invoice $invoice): Response
     {
         $this->ensureOwner($invoice);
         $invoice->load(['lines', 'client', 'attachments']);
 
-        $issuerProfile = IssuerProfileController::profile(auth()->id());
+        $issuerProfile = IssuerProfile::forUser(auth()->id());
 
         return response(
             $this->deliveryService->pdfBinary($invoice, $issuerProfile),
@@ -266,7 +269,7 @@ class InvoiceController extends Controller
         ]);
 
         $invoice->load(['lines', 'client', 'attachments']);
-        $issuerProfile = IssuerProfileController::profile(auth()->id());
+        $issuerProfile = IssuerProfile::forUser(auth()->id());
 
         $this->deliveryService->send(
             $invoice,
@@ -335,6 +338,7 @@ class InvoiceController extends Controller
         $count = Invoice::query()
             ->where('user_id', auth()->id())
             ->whereYear('issue_date', now()->year)
+            ->lockForUpdate()
             ->count() + 1;
 
         return sprintf('INV-%s-%04d', $year, $count);
