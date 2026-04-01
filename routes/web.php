@@ -7,6 +7,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\IssuerProfileController;
 use App\Http\Controllers\PbAllowanceController;
+use App\Http\Controllers\TaxSummaryController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -44,4 +45,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('pb-allowances', [PbAllowanceController::class, 'index'])
         ->name('pb-allowances.index');
+
+    Route::get('tax-summary', [TaxSummaryController::class, 'index'])->name('tax-summary.index');
+    Route::post('tax-summary/settings', [TaxSummaryController::class, 'updateSettings'])->name('tax-summary.settings');
 });
