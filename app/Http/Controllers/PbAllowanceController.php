@@ -2,82 +2,62 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CatalogItem;
 use App\Models\Invoice;
-use App\Models\InvoiceLine;
+use App\Services\PbAllowanceReportService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class PbAllowanceController extends Controller
 {
+    public function __construct(
+        private readonly PbAllowanceReportService $reportService
+    ) {}
+
     public function index(Request $request): View
     {
-        $currentYear = now()->year;
-        $selectedYear = (int) $request->integer('year', $currentYear);
-
-        if ($selectedYear < 2000 || $selectedYear > 2100) {
-            $selectedYear = $currentYear;
-        }
-
-        $allowanceDefinitions = collect(config('pb_allowances.items', []));
-        $allowanceNames = $allowanceDefinitions->pluck('name')->all();
-
-        $catalogItems = CatalogItem::query()
-            ->where('user_id', auth()->id())
-            ->whereIn('name', $allowanceNames)
-            ->get(['id', 'name'])
-            ->keyBy('name');
-
-        $catalogItemIds = $catalogItems->pluck('id')->values()->all();
-
-        $startDate = Carbon::create($selectedYear)->startOfYear()->toDateString();
-        $endDate = Carbon::create($selectedYear)->endOfYear()->toDateString();
-
-        $usageByCatalogItemId = InvoiceLine::query()
-            ->selectRaw('catalog_item_id, SUM(line_total) as used_total')
-            ->whereIn('catalog_item_id', $catalogItemIds)
-            ->whereHas('invoice', function ($query) use ($startDate, $endDate): void {
-                $query->where('user_id', auth()->id());
-                $query->whereBetween('issue_date', [$startDate, $endDate]);
-            })
-            ->groupBy('catalog_item_id')
-            ->pluck('used_total', 'catalog_item_id');
-
-        $allowances = $allowanceDefinitions->map(function (array $definition) use ($catalogItems, $usageByCatalogItemId): array {
-            $catalogItem = $catalogItems->get($definition['name']);
-            $used = $catalogItem ? (float) ($usageByCatalogItemId[$catalogItem->id] ?? 0) : 0.0;
-            $annualLimit = (float) $definition['annual_limit'];
-
-            return [
-                'key' => $definition['key'],
-                'name' => $definition['name'],
-                'annual_limit' => $annualLimit,
-                'used' => round($used, 2),
-                'remaining' => round($annualLimit - $used, 2),
-                'catalog_item_exists' => (bool) $catalogItem,
-            ];
-        })->values();
-
-        $invoiceYears = Invoice::query()
-            ->where('user_id', auth()->id())
-            ->whereNotNull('issue_date')
-            ->pluck('issue_date')
-            ->map(fn (string $issueDate): int => (int) substr($issueDate, 0, 4))
-            ->unique()
-            ->sort()
-            ->values();
-
-        $years = $invoiceYears
-            ->push($currentYear)
-            ->unique()
-            ->sortDesc()
-            ->values();
+        $userId = auth()->id();
+        $selectedYear = $this->reportService->normalizeYear((int) $request->integer('year', now()->year));
 
         return view('pb-allowances.index', [
-            'allowances' => $allowances,
+            'allowances' => $this->reportService->summaryForUser($userId, $selectedYear),
             'selectedYear' => $selectedYear,
-            'years' => $years,
+            'years' => $this->reportService->yearsForUser($userId),
+            'currency' => config('pb_allowances.currency', 'CAD'),
+        ]);
+    }
+
+    public function history(Request $request): View
+    {
+        $userId = auth()->id();
+        $selectedYear = $this->reportService->normalizeYear((int) $request->integer('year', now()->year));
+        $allowanceOptions = $this->reportService->allowanceOptionsForUser($userId);
+        $selectedAllowanceKey = (string) $request->string('allowance')->toString();
+        $selectedStatus = (string) $request->string('status')->toString();
+
+        if (! $allowanceOptions->pluck('key')->contains($selectedAllowanceKey)) {
+            $selectedAllowanceKey = '';
+        }
+
+        if (! in_array($selectedStatus, Invoice::STATUSES, true)) {
+            $selectedStatus = '';
+        }
+
+        $history = $this->reportService->historyForUser(
+            $userId,
+            $selectedYear,
+            $selectedAllowanceKey !== '' ? $selectedAllowanceKey : null,
+            $selectedStatus !== '' ? $selectedStatus : null,
+        );
+
+        return view('pb-allowances.history', [
+            'entries' => $history['entries'],
+            'selectedAllowance' => $history['selected_allowance'],
+            'selectedAllowanceKey' => $selectedAllowanceKey,
+            'selectedStatus' => $selectedStatus,
+            'selectedYear' => $selectedYear,
+            'allowanceOptions' => $allowanceOptions,
+            'years' => $this->reportService->yearsForUser($userId),
+            'statuses' => Invoice::STATUSES,
             'currency' => config('pb_allowances.currency', 'CAD'),
         ]);
     }

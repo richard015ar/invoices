@@ -45,6 +45,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('pb-allowances', [PbAllowanceController::class, 'index'])
         ->name('pb-allowances.index');
+    Route::get('pb-allowances/history', [PbAllowanceController::class, 'history'])
+        ->name('pb-allowances.history');
 
     Route::get('tax-summary', [TaxSummaryController::class, 'index'])->name('tax-summary.index');
     Route::post('tax-summary/settings', [TaxSummaryController::class, 'updateSettings'])->name('tax-summary.settings');

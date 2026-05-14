@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 class CurrencyConverter
 {
     private const API_URL = 'https://api.frankfurter.app';
+
     private const CACHE_TTL = 3600; // 1 hour
 
     public function convert(float $amount, string $from, string $to): float
@@ -27,13 +28,14 @@ class CurrencyConverter
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($from, $to) {
             try {
-                $response = Http::get(self::API_URL . '/latest', [
+                $response = Http::get(self::API_URL.'/latest', [
                     'from' => $from,
                     'to' => $to,
                 ]);
 
                 if ($response->successful()) {
                     $data = $response->json();
+
                     return $data['rates'][$to] ?? 1.0;
                 }
             } catch (\Exception $e) {

@@ -49,3 +49,11 @@ Sending an invoice attaches:
 - Book Allowance
 
 The dashboard uses invoice line totals from the selected year.
+
+Each allowance row links to a dedicated history page where you can review the underlying invoice lines with filters for:
+
+- year
+- allowance type
+- invoice status
+
+The history table includes invoice date, allowance, line description, linked invoice number, client, and amount.

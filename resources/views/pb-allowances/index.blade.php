@@ -9,7 +9,7 @@
     <div class="panel-head">
         <div>
             <h2>PB Allowances</h2>
-            <p class="eyebrow">Track anual usage by allowance type</p>
+            <p class="eyebrow">Track annual usage by allowance type</p>
         </div>
 
         <form method="GET" action="{{ route('pb-allowances.index') }}" class="year-filter">
@@ -35,6 +35,7 @@
                     <th>Annual limit</th>
                     <th>Remaining</th>
                     <th>Usage</th>
+                    <th>History</th>
                 </tr>
             </thead>
             <tbody>
@@ -62,6 +63,13 @@
                                 <div class="allowance-meter-fill" style="width: {{ number_format($usagePercent, 2, '.', '') }}%"></div>
                             </div>
                             <small>{{ number_format($usagePercent, 1) }}%</small>
+                        </td>
+                        <td>
+                            @if ($allowance['history_url'])
+                                <a href="{{ $allowance['history_url'] }}" class="table-link">View history</a>
+                            @else
+                                <span class="muted-text">Unavailable</span>
+                            @endif
                         </td>
                     </tr>
                 @endforeach

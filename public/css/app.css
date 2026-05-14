@@ -416,6 +416,40 @@ th, td {
     background: linear-gradient(90deg, #0f766e, #14b8a6);
 }
 
+.table-link {
+    color: #0f766e;
+    font-weight: 600;
+}
+
+.table-link:hover {
+    color: #115e59;
+}
+
+.muted-text {
+    color: #64748b;
+}
+
+.allowance-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.allowance-history-head {
+    align-items: flex-start;
+}
+
+.allowance-history-summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
 @media (max-width: 900px) {
     .cols-5,
     .cols-4,
